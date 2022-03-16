@@ -1,0 +1,271 @@
+(setq user-full-name "Thomas de Graaff (Tomba)"
+      user-mail-address "t.de.graaff@vu.nl")
+
+(setq inhibit-startup-message t)
+
+(server-start)
+(setq ns-pop-up-frames nil)
+
+;; Disable line numbers for some modes
+(dolist (mode '(org-mode-hook
+                term-mode-hook
+                shell-mode-hook
+                eshell-mode-hook))
+  (add-hook mode (lambda () (display-line-numbers-mode 0))))
+
+(add-hook 'window-setup-hook 'toggle-frame-fullscreen t)
+
+(defun +doom-dashboard-setup-modified-keymap ()
+  (setq +doom-dashboard-mode-map (make-sparse-keymap))
+  (map! :map +doom-dashboard-mode-map
+        :desc "Find file" :ne "f" #'find-file
+        :desc "Recent files" :ne "r" #'consult-recent-file
+        :desc "Config dir" :ne "C" #'doom/open-private-config
+        :desc "Open config.org" :ne "c" (cmd! (find-file (expand-file-name "config.org" doom-private-dir)))
+        :desc "Open dotfile" :ne "." (cmd! (doom-project-find-file "~/.config/"))
+        :desc "Notes (roam)" :ne "n" #'org-roam-node-find
+        :desc "Switch buffer" :ne "b" #'+vertico/switch-workspace-buffer
+        :desc "Switch buffers (all)" :ne "B" #'consult-buffer
+        :desc "IBuffer" :ne "i" #'ibuffer
+        :desc "Previous buffer" :ne "p" #'previous-buffer
+        :desc "Set theme" :ne "t" #'consult-theme
+        :desc "Quit" :ne "Q" #'save-buffers-kill-terminal
+        :desc "Show keybindings" :ne "h" (cmd! (which-key-show-keymap '+doom-dashboard-mode-map))))
+
+(add-transient-hook! #'+doom-dashboard-mode (+doom-dashboard-setup-modified-keymap))
+(add-transient-hook! #'+doom-dashboard-mode :append (+doom-dashboard-setup-modified-keymap))
+(add-hook! 'doom-init-ui-hook :append (+doom-dashboard-setup-modified-keymap))
+
+(map! :leader :desc "Dashboard" "d" #'+doom-dashboard/open)
+
+(setq org-directory "~/Dropbox/org"
+      org-roam-directory "~/Dropbox/org/palace")
+
+(setq doom-font (font-spec :family "Fira Code" :size 16)
+      doom-big-font (font-spec :family "Fira Code" :size 24)
+      doom-variable-pitch-font (font-spec :family "Overpass" :size 16)
+      doom-unicode-font (font-spec :family "JuliaMono")
+      doom-serif-font (font-spec :family "IBM Plex Mono" :weight 'light))
+
+(use-package! mixed-pitch
+  :hook (org-mode . mixed-pitch-mode)
+  :config
+  (setq mixed-pitch-face 'variable-pitch))
+
+;; Undo the helm text enlargement in childframes
+(setq +helm-posframe-text-scale 0)
+
+(setq doom-theme 'doom-dracula)
+
+(setq +format-on-save-enabled-modes '(not emacs-lisp-mode ; works well enough without it
+                                          sql-mode        ; sqlformat is broken
+                                          tex-mode        ; latexindent is broken
+                                          latex-mode      ; latexindent is broken
+                                          bibtex-mode     ; is broken
+                                          ess-r-mode      ; styler takes forever
+                                          web-mode      ; dunno who this is for
+                                          ))
+
+(after! tex
+ (setq TeX-view-program-selection
+        '(
+          (output-pdf "PDF Tools")
+          (output-pdf "Skim")
+         (output-pdf "preview-pane")
+          ((output-dvi has-no-display-manager)
+           "dvi2tty")
+          ((output-dvi style-pstricks)
+           "dvips and gv")
+          (output-dvi "xdvi")
+          (output-html "xdg-open")
+         )))
+
+;; This is to use pdf-tools instead of doc-viewer
+(use-package! pdf-tools
+  :config
+  (pdf-tools-install)
+  ;; This means that pdfs are fitted to width by default when you open them
+  :custom
+  (pdf-annot-activate-created-annotations t "automatically annotate highlights"))
+
+(after! helm
+  (use-package! helm-bibtex
+    :custom
+    (bibtex-completion-bibliography '("~/Dropbox/org/references/references.bib"))
+    (reftex-default-bibliography '("~/Dropbox/org/references/references.bib"))
+    ;; The line below tells helm-bibtex to find the path to the pdf
+    ;; in the "file" field in the .bib file.
+    (bibtex-completion-pdf-field "file")
+    :hook (Tex . (lambda () (define-key Tex-mode-map "\C-ch" 'helm-bibtex))))
+    bibtex-completion-notes-template-multiple-files
+    (concat
+    "#+TITLE: ${title}\n"
+    "#+ROAM_KEY: cite:${=key=}\n"
+    "#+ROAM_TAGS: ${keywords}\n"
+    "* TODO Notes\n"
+    ":PROPERTIES:\n"
+    ":Custom_ID: ${=key=}\n"
+    ":NOTER_DOCUMENT: %(orb-process-file-field \"${=key=}\")\n"
+    ":AUTHOR: ${author-abbrev}\n"
+    ":JOURNAL: ${journaltitle}\n"
+    ":DATE: ${date}\n"
+    ":YEAR: ${year}\n"
+    ":DOI: ${doi}\n"
+    ":URL: ${url}\n"
+    ":END:\n\n"
+    )
+)
+
+(defun tomba/org-font-setup ()
+  ;; Replace list hyphen with dot
+  (font-lock-add-keywords 'org-mode
+                          '(("^ *\\([-]\\) "
+                             (0 (prog1 () (compose-region (match-beginning 1) (match-end 1) "•"))))))
+
+  ;; Set faces for heading levels
+  (dolist (face '((org-level-1 . 1.2)
+                  (org-level-2 . 1.1)
+                  (org-level-3 . 1.05)
+                  (org-level-4 . 1.0)
+                  (org-level-5 . 1.1)
+                  (org-level-6 . 1.1)
+                  (org-level-7 . 1.1)
+                  (org-level-8 . 1.1)))
+    (set-face-attribute (car face) nil :font "Cantarell" :weight 'regular :height (cdr face)))
+
+  ;; Ensure that anything that should be fixed-pitch in Org files appears that way
+  (set-face-attribute 'org-block nil :foreground nil :inherit 'fixed-pitch)
+  (set-face-attribute 'org-code nil   :inherit '(shadow fixed-pitch))
+  (set-face-attribute 'org-table nil   :inherit '(shadow fixed-pitch))
+  (set-face-attribute 'org-verbatim nil :inherit '(shadow fixed-pitch))
+  (set-face-attribute 'org-special-keyword nil :inherit '(font-lock-comment-face fixed-pitch))
+  (set-face-attribute 'org-meta-line nil :inherit '(font-lock-comment-face fixed-pitch))
+  (set-face-attribute 'org-checkbox nil :inherit 'fixed-pitch))
+
+(use-package org
+  :config
+  (setq org-ellipsis " ▾")
+  (tomba/org-font-setup))
+
+(use-package org-superstar
+    :hook (org-mode . org-superstar-mode)
+    :config
+    (setq org-superstar-headline-bullets-list '("◉" "○" "●" "○" "●" "○" "●")))
+
+(defun tomba/org-mode-visual-fill ()
+  (setq visual-fill-column-width 100
+        visual-fill-column-center-text t)
+  (visual-fill-column-mode 1))
+
+(use-package visual-fill-column
+  :hook (org-mode . tomba/org-mode-visual-fill))
+
+(after! org-roam
+  (setq org-roam-directory "~/Dropbox/org/palace")
+
+  (add-hook 'after-init-hook 'org-roam-mode)
+
+  ;; Let's set up some org-roam capture templates
+  (setq org-roam-capture-templates
+        (quote (("d" "default" plain (function org-roam--capture-get-point)
+                 "%?"
+                 :file-name "%<%Y-%m-%d-%H%M%S>-${slug}"
+                 :head "#+title: ${title}\n"
+                 :unnarrowed t)
+                )))
+
+  ;; And now we set necessary variables for org-roam-dailies
+  (setq org-roam-dailies-capture-templates
+        '(("d" "default" entry
+           #'org-roam-capture--get-point
+           "* %?"
+           :file-name "daily/%<%Y-%m-%d>"
+           :head "#+title: %<%Y-%m-%d>\n\n"))))
+
+ ;; org-roam-bibtex stuff
+(use-package org-roam-bibtex
+  :after (org-roam)
+  :hook (org-roam-mode . org-roam-bibtex-mode)
+  :config
+  (setq org-roam-bibtex-preformat-keywords
+   '("=key=" "title" "url" "file" "author-or-editor" "keywords"))
+  (setq orb-templates
+        '(("r" "ref" plain (function org-roam-capture--get-point)
+           ""
+           :file-name "${slug}"
+           :head "#+TITLE: ${=key=}: ${title}\n#+ROAM_KEY: ${ref}
+
+- tags ::
+- keywords :: ${keywords}
+
+\n* ${title}\n  :PROPERTIES:\n  :Custom_ID: ${=key=}\n  :URL: ${url}\n  :AUTHOR: ${author-or-editor}\n  :NOTER_DOCUMENT: %(orb-process-file-field \"${=key=}\")\n  :NOTER_PAGE: \n  :END:\n\n"
+
+           :unnarrowed t))))
+
+ ;; org-noter stuff
+  (after! org-noter
+    (setq
+          org-noter-notes-search-path '("~/Dropbox/org/palace/")
+          org-noter-hide-other nil
+          org-noter-separate-notes-from-heading t
+          org-noter-always-create-frame nil)
+    (map!
+     :map org-noter-doc-mode-map
+     :leader
+     :desc "Insert note"
+     "m i" #'org-noter-insert-note
+     :desc "Insert precise note"
+     "m p" #'org-noter-insert-precise-note
+     :desc "Go to previous note"
+     "m k" #'org-noter-sync-prev-note
+     :desc "Go to next note"
+     "m j" #'org-noter-sync-next-note
+     :desc "Create skeleton"
+     "m s" #'org-noter-create-skeleton
+     :desc "Kill session"
+     "m q" #'org-noter-kill-session
+     )
+  )
+
+ ;; Set up org-ref stuff
+  (use-package! org-ref
+    :custom
+    (org-ref-default-bibliography "~/Dropbox/org/references/references.bib")
+    (org-ref-default-citation-link "citep")
+          (org-ref-insert-link-function 'org-ref-insert-link-hydra/body)
+          (org-ref-insert-cite-function 'org-ref-cite-insert-helm)
+          (org-ref-insert-label-function 'org-ref-insert-label-link)
+          (org-ref-insert-ref-function 'org-ref-insert-ref-link)
+          (org-ref-cite-onclick-function (lambda (_) (org-ref-citation-hydra/body))))
+
+  (define-key org-mode-map (kbd "C-c ]") 'org-ref-insert-link)
+  (define-key org-mode-map (kbd "s-[") 'org-ref-insert-link-hydra/body)
+
+ (defun my/org-ref-open-pdf-at-point ()
+  "Open the pdf for bibtex key under point if it exists."
+  (interactive)
+  (let* ((results (org-ref-get-bibtex-key-and-file))
+         (key (car results))
+         (pdf-file (funcall org-ref-get-pdf-filename-function key)))
+    (if (file-exists-p pdf-file)
+        (find-file pdf-file)
+      (message "No PDF found for %s" key))))
+
+  (setq org-ref-completion-library 'org-ref-ivy-cite
+        org-export-latex-format-toc-function 'org-export-latex-no-toc
+        org-ref-get-pdf-filename-function
+        (lambda (key) (car (bibtex-completion-find-pdf key)))
+        ;; See the function I defined above.
+        org-ref-open-pdf-function 'my/org-ref-open-pdf-at-point
+        ;; For pdf export engines.
+        org-latex-pdf-process (list "latexmk -pdflatex='%latex -shell-escape -interaction nonstopmode' -pdf -bibtex -f -output-directory=%o %f")
+        ;; I use orb to link org-ref, helm-bibtex and org-noter together (see below for more on org-noter and orb).
+        org-ref-notes-function 'orb-edit-notes)
+
+(map! :leader
+      :desc "Open literature database"
+      "o l" #'helm-bibtex)
+
+(map! :leader
+      :desc "Org noter"
+      "n p" #'org-noter)
